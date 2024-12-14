@@ -3,129 +3,109 @@ from pytrends.request import TrendReq
 import pandas as pd
 import plotly.express as px
 from datetime import datetime
-import pytz
 import time
 import numpy as np
 
-# Page configuration must be the first Streamlit command
-st.set_page_config(layout="wide")
-
 def get_best_time_for_keyword(keyword):
+    """Fetch and analyze the best posting time for a given keyword."""
     try:
-        # Setup pytrends
+        if not keyword.strip():
+            st.error("Please enter a valid keyword.")
+            return None, None
+
+        # Set up Pytrends
         pytrends = TrendReq(hl='en-US', tz=360, retries=2, backoff_factor=0.5, timeout=30)
 
-        # Set keyword and timeframe
-        kw_list = [keyword]
-        pytrends.build_payload(kw_list, cat=0, timeframe='now 1-d', geo='', gprop='youtube')
-
-        # Get search data
+        # Fetch data
+        pytrends.build_payload([keyword], cat=0, timeframe='now 1-d', geo='', gprop='youtube')
         data = pytrends.interest_over_time()
 
         if data.empty:
-            st.error(f"No data found for keyword: {keyword}. Please try again later.")
+            st.error(f"No data available for keyword: {keyword}. Please try another one.")
             return None, None
 
-        # Clean and analyze data
+        # Process data
         data = data.reset_index()
         data['hour'] = data['date'].dt.hour
         hourly_interest = data.groupby('hour').mean()[keyword]
 
-        # Find best time
+        # Determine the best hour
         best_hour = hourly_interest.idxmax()
-        
         return hourly_interest, best_hour
 
     except Exception as e:
-        st.error("An error occurred. Please try again later.")
+        st.error("An error occurred while processing the data. Please try again later.")
+        st.error(f"Error details: {str(e)}")
         return None, None
 
 def main():
-    # Custom CSS
+    # Set up page configuration
+    st.set_page_config(page_title="Best Time to Post on YouTube", layout="wide")
+
+    # Custom CSS for styling
     st.markdown("""
         <style>
-        .main {
-            padding: 2rem;
+        .main-title {
+            text-align: center;
+            color: #333;
+        }
+        .description {
+            text-align: center;
+            color: #777;
+            margin-bottom: 20px;
         }
         .stButton > button {
-            display: block;
-            margin: 0 auto;
-            background-color: #FF4B4B;
+            width: 100%;
+            background-color: #4CAF50;
             color: white;
-            padding: 0.5rem 2rem;
-        }
-        .title {
-            text-align: center;
-            margin-bottom: 2rem;
-        }
-        .subtitle {
-            text-align: center;
-            margin-bottom: 2rem;
+            font-size: 16px;
+            padding: 10px;
+            border-radius: 5px;
         }
         </style>
     """, unsafe_allow_html=True)
 
-    # Title and description
-    st.markdown("<h1 class='title'>🎯 Best Time to Post on YouTube</h1>", unsafe_allow_html=True)
-    st.markdown("<p class='subtitle'>This tool helps you find the optimal posting time on YouTube based on search trends analysis</p>", unsafe_allow_html=True)
+    # App title and description
+    st.markdown("<h1 class='main-title'>🎯 Best Time to Post on YouTube</h1>", unsafe_allow_html=True)
+    st.markdown("<p class='description'>Find the optimal posting time for your YouTube content based on search trends.</p>", unsafe_allow_html=True)
 
-    # Center the input field
-    col1, col2, col3 = st.columns([1,2,1])
-    with col2:
-        keyword = st.text_input("Enter your keyword:")
-        analyze_button = st.button("Analyze")
+    # User input section
+    keyword = st.text_input("Enter your keyword:")
+    analyze_button = st.button("Analyze")
 
     if analyze_button:
-        # Add delay to prevent rate limiting
+        # Add delay to avoid rate limiting
         time.sleep(1)
-        
-        with st.spinner('Analyzing data...'):
+
+        # Analyze keyword trends
+        with st.spinner('Analyzing trends...'):
             hourly_interest, best_hour = get_best_time_for_keyword(keyword)
 
             if hourly_interest is not None and best_hour is not None:
-                # Show results
-                st.markdown(f"<h3 style='text-align: center'>🎉 Best time to post content about '{keyword}' is at {best_hour}:00</h3>", unsafe_allow_html=True)
+                # Display best time
+                st.markdown(f"<h3 style='text-align: center;'>🎉 The best time to post about '{keyword}' is at {best_hour}:00.</h3>", unsafe_allow_html=True)
 
-                # Create columns for chart and table
+                # Display chart and table
                 col1, col2 = st.columns(2)
 
                 with col1:
-                    # Create graph
+                    st.subheader("Hourly Interest Levels")
                     fig = px.line(
                         x=hourly_interest.index,
                         y=hourly_interest.values,
-                        title=f"Search Activity Throughout the Day for '{keyword}'",
-                        labels={'x': 'Hour', 'y': 'Interest Level'}
+                        title=f"Interest Over the Day for '{keyword}'",
+                        labels={"x": "Hour", "y": "Interest Level"}
                     )
-                    fig.update_layout(
-                        xaxis_title="Hour",
-                        yaxis_title="Interest Level",
-                        hovermode='x',
-                        title_x=0.5
-                    )
+                    fig.update_layout(xaxis_title="Hour", yaxis_title="Interest Level", title_x=0.5)
                     st.plotly_chart(fig)
 
                 with col2:
-                    # Display data in table
-                    st.subheader("Hourly Activity Details:")
-                    df_display = pd.DataFrame({
-                        'Hour': hourly_interest.index,
-                        'Interest Level': np.round(hourly_interest.values, 2)  # Using numpy's round function
+                    st.subheader("Interest Level Table")
+                    table_data = pd.DataFrame({
+                        "Hour": hourly_interest.index,
+                        "Interest Level": np.round(hourly_interest.values, 2)
                     })
-                    st.table(df_display.style.highlight_max(subset=['Interest Level']))
-
-    # Hide links
-    hide_links_style = """
-        <style>
-        a {
-            pointer-events: none;
-            cursor: default;
-            text-decoration: none;
-            color: inherit;
-        }
-        </style>
-    """
-    st.markdown(hide_links_style, unsafe_allow_html=True)                    
+                    st.dataframe(table_data.style.highlight_max(subset=["Interest Level"], color="lightgreen"))
 
 if __name__ == "__main__":
     main()
