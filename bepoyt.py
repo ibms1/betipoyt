@@ -109,5 +109,17 @@ def main():
                     })
                     st.dataframe(table_data.style.highlight_max(subset=["Interest Level"], color="lightgreen"))
 
+hide_links_style = """
+        <style>
+        a {
+            pointer-events: none;
+            cursor: default;
+            text-decoration: none;
+            color: inherit;
+        }
+        </style>
+        """
+st.markdown(hide_links_style, unsafe_allow_html=True)
+
 if __name__ == "__main__":
     main()
