@@ -7,6 +7,9 @@ import pytz
 import time
 import numpy as np
 
+# Page configuration must be the first Streamlit command
+st.set_page_config(layout="wide")
+
 def get_best_time_for_keyword(keyword):
     try:
         # Setup pytrends
@@ -38,9 +41,6 @@ def get_best_time_for_keyword(keyword):
         return None, None
 
 def main():
-    # Page config
-    st.set_page_config(layout="wide")
-    
     # Custom CSS
     st.markdown("""
         <style>
@@ -114,9 +114,8 @@ def main():
                     })
                     st.table(df_display.style.highlight_max(subset=['Interest Level']))
 
-
-
-hide_links_style = """
+    # Hide links
+    hide_links_style = """
         <style>
         a {
             pointer-events: none;
@@ -125,8 +124,8 @@ hide_links_style = """
             color: inherit;
         }
         </style>
-        """
-st.markdown(hide_links_style, unsafe_allow_html=True)                    
+    """
+    st.markdown(hide_links_style, unsafe_allow_html=True)                    
 
 if __name__ == "__main__":
     main()
