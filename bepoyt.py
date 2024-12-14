@@ -55,12 +55,14 @@ def main():
             margin-bottom: 20px;
         }
         .stButton > button {
-            width: 100%;
+            display: block;
+            margin: 0 auto;
             background-color: #4CAF50;
             color: white;
             font-size: 16px;
             padding: 10px;
             border-radius: 5px;
+            width: 150px; /* Set the width of the button */
         }
         </style>
     """, unsafe_allow_html=True)
