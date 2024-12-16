@@ -6,6 +6,9 @@ import time
 from datetime import datetime
 import numpy as np
 import random
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util import Retry
 
 # Page configuration
 st.set_page_config(
@@ -15,7 +18,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Custom CSS with centered button
+# Custom CSS
 st.markdown("""
     <style>
     .main-title {
@@ -31,12 +34,10 @@ st.markdown("""
         font-size: 1.2rem;
         margin-bottom: 2rem;
     }
-    /* Center form elements */
     div[data-testid="stForm"] {
         max-width: 600px;
         margin: 0 auto;
     }
-    /* Button styling */
     .stButton {
         text-align: center;
         margin-top: 1rem;
@@ -67,24 +68,41 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 def create_pytrends_session():
-    """Create a PyTrends session with improved error handling"""
+    """Create a PyTrends session with modern retry handling"""
     user_agents = [
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0',
         'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
     ]
     
+    # Create a custom session
+    session = requests.Session()
+    
+    # Modern retry strategy
+    retry_strategy = Retry(
+        total=3,
+        backoff_factor=1,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["HEAD", "GET", "OPTIONS", "POST"]
+    )
+    
+    adapter = HTTPAdapter(max_retries=retry_strategy)
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+    
+    # Set random user agent
+    session.headers.update({
+        'User-Agent': random.choice(user_agents)
+    })
+    
     return TrendReq(
         hl='en-US',
         tz=360,
         timeout=30,
-        retries=2,  # Reduced number of retries
-        requests_args={
-            'headers': {
-                'User-Agent': random.choice(user_agents)
-            },
-            'verify': True,
-        }
+        requests_args={'verify': True},
+        tz_offset=False,
+        custom_useragent=None,
+        session=session
     )
 
 @st.cache_data(ttl=3600)
@@ -97,9 +115,11 @@ def get_best_time_for_keyword(keyword):
 
         time.sleep(random.uniform(2, 4))
 
-        # Manual retry logic instead of using backoff
+        data = None
+        error_count = 0
         max_attempts = 3
-        for attempt in range(max_attempts):
+
+        while error_count < max_attempts:
             try:
                 pytrends = create_pytrends_session()
                 pytrends.build_payload(
@@ -111,20 +131,19 @@ def get_best_time_for_keyword(keyword):
                 )
                 data = pytrends.interest_over_time()
                 
-                if data is None or data.empty:
-                    if attempt < max_attempts - 1:
-                        time.sleep(random.uniform(5, 8))
-                        continue
-                    st.warning(f"No data available for '{keyword}'. Try a different keyword.")
-                    return None, None, None
-                
-                break
-                
+                if data is not None and not data.empty:
+                    break
+                    
             except Exception as e:
-                if attempt < max_attempts - 1:
+                error_count += 1
+                if error_count < max_attempts:
                     time.sleep(random.uniform(5, 8))
-                    continue
-                raise e
+                else:
+                    raise e
+
+        if data is None or data.empty:
+            st.warning(f"No data available for '{keyword}'. Try a different keyword.")
+            return None, None, None
 
         data = data.reset_index()
         data['hour'] = data['date'].dt.hour
