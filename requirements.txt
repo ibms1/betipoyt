@@ -1,6 +1,6 @@
-numpy
-pandas
-pytrends
 streamlit
+pytrends
+pandas
 plotly
-backoff
+numpy
+requests

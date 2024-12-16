@@ -1,99 +1,112 @@
-import streamlit as st
+import streamlit as st 
 from pytrends.request import TrendReq
 import pandas as pd
 import plotly.express as px
-from datetime import datetime, timedelta
 import time
+from datetime import datetime
 import numpy as np
 from requests.exceptions import RequestException
-import backoff
+import random
 
-# Custom decorator for exponential backoff
-@backoff.on_exception(
-    backoff.expo,
-    (RequestException, Exception),
-    max_tries=5,
-    max_time=30
-)
-def fetch_trends_with_retry(pytrends, keyword):
-    """Fetch trends data with retry logic"""
-    pytrends.build_payload([keyword], cat=0, timeframe='now 1-d', geo='', gprop='youtube')
-    return pytrends.interest_over_time()
-
-def get_best_time_for_keyword(keyword):
-    """Fetch and analyze the best posting time for a given keyword with improved error handling."""
+def create_pytrends_session():
+    """Create a PyTrends session with optimized settings for Streamlit Cloud"""
+    # List of different user agents to rotate
+    user_agents = [
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    ]
+    
+    # Try to create a session with different settings
     try:
-        if not keyword.strip():
-            st.error("Please enter a valid keyword.")
-            return None, None
-
-        # Initialize session state for rate limiting
-        if 'last_request_time' not in st.session_state:
-            st.session_state.last_request_time = datetime.min
-
-        # Rate limiting - ensure at least 1 second between requests
-        time_since_last_request = datetime.now() - st.session_state.last_request_time
-        if time_since_last_request.total_seconds() < 1:
-            time.sleep(1 - time_since_last_request.total_seconds())
-
-        # Set up Pytrends with increased timeout and custom headers
-        pytrends = TrendReq(
+        return TrendReq(
             hl='en-US',
             tz=360,
             timeout=30,
-            retries=3,
-            backoff_factor=1.5,
+            retries=5,
+            backoff_factor=2,
             requests_args={
                 'headers': {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-                }
+                    'User-Agent': random.choice(user_agents)
+                },
+                'verify': True,
+                'proxies': None  # Let requests handle proxy automatically
             }
         )
+    except Exception as e:
+        st.error(f"Failed to create session: {str(e)}")
+        return None
 
-        # Fetch data with retry logic
-        with st.spinner('Fetching trend data...'):
-            data = fetch_trends_with_retry(pytrends, keyword)
-            st.session_state.last_request_time = datetime.now()
+@st.cache_data(ttl=3600)  # Cache data for 1 hour
+def get_best_time_for_keyword(keyword):
+    """Fetch and analyze the best posting time for a given keyword."""
+    try:
+        if not keyword.strip():
+            st.error("Please enter a valid keyword.")
+            return None, None, None
 
-        if data is None or data.empty:
-            st.warning(f"No trend data available for '{keyword}'. Try a more popular keyword or check your internet connection.")
-            return None, None
+        # Add delay between requests
+        time.sleep(2)
+
+        # Create new session
+        pytrends = create_pytrends_session()
+        if pytrends is None:
+            return None, None, None
+
+        # Fetch data with multiple retries
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                pytrends.build_payload([keyword], cat=0, timeframe='now 1-d', geo='', gprop='youtube')
+                data = pytrends.interest_over_time()
+                
+                if data is None or data.empty:
+                    if attempt < max_retries - 1:
+                        time.sleep(5)  # Wait before retry
+                        continue
+                    st.warning(f"No data available for '{keyword}'. Try a different keyword.")
+                    return None, None, None
+                
+                break  # Success - exit retry loop
+                
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    time.sleep(5)  # Wait before retry
+                    continue
+                raise e
 
         # Process data
         data = data.reset_index()
         data['hour'] = data['date'].dt.hour
         hourly_interest = data.groupby('hour').mean()[keyword]
 
-        # Add smoothing to reduce noise
+        # Smooth the data
         hourly_interest = hourly_interest.rolling(window=3, center=True, min_periods=1).mean()
 
-        # Determine the best hour
+        # Find best hour and calculate confidence
         best_hour = hourly_interest.idxmax()
-        
-        # Get confidence score based on data variance
         confidence_score = min(100, (1 - hourly_interest.std() / hourly_interest.mean()) * 100)
         
         return hourly_interest, best_hour, confidence_score
 
     except Exception as e:
-        error_message = str(e)
-        if "429" in error_message:
+        error_msg = str(e).lower()
+        if "429" in error_msg:
             st.error("Too many requests. Please wait a few minutes before trying again.")
-        elif "method_whitelist" in error_message:
-            st.error("API authentication error. Please try again in a few moments.")
+        elif "authentication" in error_msg or "unauthorized" in error_msg:
+            st.error("Temporary API access issue. Please try again in a few moments.")
         else:
-            st.error(f"An unexpected error occurred: {error_message}")
+            st.error(f"An error occurred. Please try again later.")
         return None, None, None
 
 def main():
-    # Set up page configuration
     st.set_page_config(
         page_title="Best Time to Post on YouTube",
         layout="wide",
         initial_sidebar_state="collapsed"
     )
 
-    # Custom CSS with error handling styles
+    # Custom CSS
     st.markdown("""
         <style>
         .main-title {
@@ -115,24 +128,10 @@ def main():
             padding: 10px 20px;
             border-radius: 5px;
             width: 150px;
-            transition: all 0.3s ease;
         }
-        .stButton > button:hover {
-            background-color: #45a049;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-        }
-        .error-message {
-            background-color: #ffebee;
-            border-left: 5px solid #f44336;
-            padding: 1em;
-            margin: 1em 0;
-            border-radius: 4px;
-        }
-        .confidence-meter {
-            margin-top: 1em;
-            padding: 1em;
-            background: #f5f5f5;
-            border-radius: 4px;
+        div[data-testid="stMetricValue"] {
+            font-size: 24px;
+            color: #4CAF50;
         }
         </style>
     """, unsafe_allow_html=True)
@@ -141,14 +140,13 @@ def main():
     st.markdown("<h1 class='main-title'>🎯 Best Time to Post on YouTube</h1>", unsafe_allow_html=True)
     st.markdown("<p class='description'>Find the optimal posting time for your YouTube content based on search trends.</p>", unsafe_allow_html=True)
 
-    # Input section with better validation
-    keyword = st.text_input("Enter your keyword:", help="Enter a topic or theme related to your video content")
-    
-    col1, col2, col3 = st.columns([1,1,1])
-    with col2:
-        analyze_button = st.button("Analyze")
+    # Input section
+    with st.form("search_form"):
+        keyword = st.text_input("Enter your keyword:", 
+                              help="Enter a topic or theme related to your video content")
+        submitted = st.form_submit_button("Analyze")
 
-    if analyze_button:
+    if submitted:
         with st.spinner('Analyzing trends...'):
             hourly_interest, best_hour, confidence_score = get_best_time_for_keyword(keyword)
 
@@ -156,7 +154,7 @@ def main():
                 # Display results
                 st.markdown(f"### 🎉 Results for '{keyword}'")
                 
-                # Convert best hour to 12-hour format
+                # Convert to 12-hour format
                 am_pm = "AM" if best_hour < 12 else "PM"
                 display_hour = best_hour if best_hour <= 12 else best_hour - 12
                 if display_hour == 0:
@@ -165,7 +163,7 @@ def main():
                 st.markdown(f"#### Best posting time: {display_hour}:00 {am_pm}")
                 
                 if confidence_score:
-                    st.markdown(f"Confidence Score: {confidence_score:.1f}%")
+                    st.metric("Confidence Score", f"{confidence_score:.1f}%")
                     st.progress(confidence_score/100)
 
                 # Display visualization and data
@@ -203,3 +201,16 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+hide_links_style = """
+        <style>
+        a {
+            pointer-events: none;
+            cursor: default;
+            text-decoration: none;
+            color: inherit;
+        }
+        </style>
+        """
+st.markdown(hide_links_style, unsafe_allow_html=True)    
