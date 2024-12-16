@@ -3,3 +3,4 @@ pandas
 pytrends
 streamlit
 plotly
+backoff
