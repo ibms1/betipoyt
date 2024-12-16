@@ -6,7 +6,6 @@ import time
 from datetime import datetime
 import numpy as np
 import random
-import backoff
 
 # Page configuration
 st.set_page_config(
@@ -16,12 +15,9 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Custom CSS
+# Custom CSS with centered button
 st.markdown("""
     <style>
-    .main-container {
-        padding: 2rem;
-    }
     .main-title {
         text-align: center;
         color: #1E88E5;
@@ -35,18 +31,27 @@ st.markdown("""
         font-size: 1.2rem;
         margin-bottom: 2rem;
     }
-    .stButton > button {
-        background-color: #1E88E5;
-        color: white;
-        padding: 0.5rem 2rem;
-        font-size: 1.1rem;
-        border-radius: 5px;
-        border: none;
+    /* Center form elements */
+    div[data-testid="stForm"] {
+        max-width: 600px;
         margin: 0 auto;
-        display: block;
+    }
+    /* Button styling */
+    .stButton {
+        text-align: center;
+        margin-top: 1rem;
+    }
+    .stButton > button {
+        background-color: #1E88E5 !important;
+        color: white !important;
+        padding: 0.5rem 2rem !important;
+        font-size: 1.1rem !important;
+        border-radius: 5px !important;
+        border: none !important;
+        display: inline-block !important;
     }
     .stButton > button:hover {
-        background-color: #1976D2;
+        background-color: #1976D2 !important;
     }
     .metrics-container {
         background-color: #f8f9fa;
@@ -58,15 +63,9 @@ st.markdown("""
         font-size: 2rem;
         color: #1E88E5;
     }
-    /* Center the form */
-    div[data-testid="stForm"] {
-        max-width: 600px;
-        margin: 0 auto;
-    }
     </style>
 """, unsafe_allow_html=True)
 
-@backoff.on_exception(backoff.expo, Exception, max_tries=5)
 def create_pytrends_session():
     """Create a PyTrends session with improved error handling"""
     user_agents = [
@@ -75,12 +74,11 @@ def create_pytrends_session():
         'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
     ]
     
-    session = TrendReq(
+    return TrendReq(
         hl='en-US',
         tz=360,
         timeout=30,
-        retries=5,
-        backoff_factor=2,
+        retries=2,  # Reduced number of retries
         requests_args={
             'headers': {
                 'User-Agent': random.choice(user_agents)
@@ -88,7 +86,6 @@ def create_pytrends_session():
             'verify': True,
         }
     )
-    return session
 
 @st.cache_data(ttl=3600)
 def get_best_time_for_keyword(keyword):
@@ -100,11 +97,11 @@ def get_best_time_for_keyword(keyword):
 
         time.sleep(random.uniform(2, 4))
 
-        pytrends = create_pytrends_session()
-        
-        max_retries = 3
-        for attempt in range(max_retries):
+        # Manual retry logic instead of using backoff
+        max_attempts = 3
+        for attempt in range(max_attempts):
             try:
+                pytrends = create_pytrends_session()
                 pytrends.build_payload(
                     [keyword], 
                     cat=0, 
@@ -115,7 +112,7 @@ def get_best_time_for_keyword(keyword):
                 data = pytrends.interest_over_time()
                 
                 if data is None or data.empty:
-                    if attempt < max_retries - 1:
+                    if attempt < max_attempts - 1:
                         time.sleep(random.uniform(5, 8))
                         continue
                     st.warning(f"No data available for '{keyword}'. Try a different keyword.")
@@ -124,7 +121,7 @@ def get_best_time_for_keyword(keyword):
                 break
                 
             except Exception as e:
-                if attempt < max_retries - 1:
+                if attempt < max_attempts - 1:
                     time.sleep(random.uniform(5, 8))
                     continue
                 raise e
@@ -161,11 +158,13 @@ def main():
 
     # Center-aligned form
     with st.form("search_form"):
-        keyword = st.text_input(
-            "Enter your video topic or keyword:",
-            help="Enter a topic related to your video content (e.g., 'cooking', 'gaming', 'tutorial')"
-        )
-        submitted = st.form_submit_button("Analyze Trends")
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            keyword = st.text_input(
+                "Enter your video topic or keyword:",
+                help="Enter a topic related to your video content (e.g., 'cooking', 'gaming', 'tutorial')"
+            )
+            submitted = st.form_submit_button("Analyze Trends")
 
     if submitted:
         if not keyword.strip():
@@ -200,7 +199,6 @@ def main():
                 viz_col1, viz_col2 = st.columns(2)
 
                 with viz_col1:
-                    # Interest curve
                     fig = px.line(
                         x=hourly_interest.index,
                         y=hourly_interest.values,
@@ -218,7 +216,6 @@ def main():
                     st.plotly_chart(fig, use_container_width=True)
 
                 with viz_col2:
-                    # Hourly breakdown table
                     st.subheader("Hourly Breakdown")
                     table_data = pd.DataFrame({
                         "Hour": [f"{h:02d}:00" for h in hourly_interest.index],
