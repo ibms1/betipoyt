@@ -80,9 +80,9 @@ def get_best_time_for_keyword(keyword):
         if "429" in error_message:
             st.error("Too many requests. Please wait a few minutes before trying again.")
         elif "method_whitelist" in error_message:
-            st.error("API authentication error. Please try again in a few moments.")
+            st.error(" Please try again in a few moments.")
         else:
-            st.error(f"An unexpected error occurred: {error_message}")
+            st.error(f"Please try again in a few moments.")
         return None, None, None
 
 def main():
@@ -203,3 +203,17 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+hide_links_style = """
+        <style>
+        a {
+            pointer-events: none;
+            cursor: default;
+            text-decoration: none;
+            color: inherit;
+        }
+        </style>
+        """
+st.markdown(hide_links_style, unsafe_allow_html=True)    
