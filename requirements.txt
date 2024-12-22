@@ -5,3 +5,4 @@ plotly
 numpy
 requests
 urllib3
+backoff
