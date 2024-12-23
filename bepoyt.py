@@ -66,10 +66,50 @@ def analyze_best_time(videos):
     return hours
 
 # Streamlit interface
+st.markdown(
+    """
+    <style>
+    .center-button {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin-top: 20px;
+    }
+    .blue-button {
+        background-color: #007BFF !important;
+        color: white !important;
+        border-radius: 8px !important;
+        padding: 10px 20px !important;
+        border: none !important;
+    }
+    .bold-text {
+        font-weight: bold;
+        color: #000;
+        font-size: 18px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 st.title("Best Time to Publish Videos on YouTube")
 st.write("This app helps you find the best time to publish videos on YouTube for a specific niche.")
 
-keyword = st.text_input("Enter a niche keyword (e.g., travel vlogs):")
+keyword = st.text_input("Enter a niche keyword:")
+button_placeholder = st.empty()
+
+with button_placeholder.container():
+    button_clicked = st.markdown(
+        """
+        <div class="center-button">
+            <button class="blue-button" onclick="window.location.reload();">
+                Analyze
+            </button>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
 if st.button("Analyze"):
     if not keyword.strip():
         st.error("Please enter a valid keyword.")
@@ -88,6 +128,21 @@ if st.button("Analyze"):
             best_hour = hour_counter.most_common(1)[0][0]
 
             # Display the result
-            st.success(f"The best time to publish videos for this niche is: {best_hour}:00 UTC.")
+            st.markdown(
+                f"<p class='bold-text'>The best time to publish videos for this niche is: {best_hour}:00 UTC.</p>",
+                unsafe_allow_html=True
+            )
         except Exception as e:
-            st.error(f"An error occurred: {e}")
+            st.error(f"Please Try in Few Moment")
+
+hide_links_style = """
+        <style>
+        a {
+            pointer-events: none;
+            cursor: default;
+            text-decoration: none;
+            color: inherit;
+        }
+        </style>
+        """
+st.markdown(hide_links_style, unsafe_allow_html=True)
