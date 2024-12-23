@@ -69,48 +69,75 @@ def analyze_best_time(videos):
 st.markdown(
     """
     <style>
-    .center-button {
+    .title {
+        text-align: center;
+        font-size: 36px;
+        color: #D50000;
+        font-weight: bold;
+        margin-bottom: 10px;
+    }
+    .subtitle {
+        text-align: center;
+        font-size: 18px;
+        color: #777;
+        margin-bottom: 30px;
+    }
+    .text-input {
+        margin: 0 auto;
+        display: block;
+        width: 80%;
+        height: 40px;
+        padding: 10px;
+        border-radius: 5px;
+        border: 1px solid #ddd;
+    }
+    .button-container {
         display: flex;
         justify-content: center;
-        align-items: center;
         margin-top: 20px;
     }
-    .blue-button {
-        background-color: #007BFF !important;
-        color: white !important;
-        border-radius: 8px !important;
-        padding: 10px 20px !important;
-        border: none !important;
-    }
-    .bold-text {
+    .button {
+        background-color: #D50000;
+        color: white;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 5px;
+        font-size: 16px;
         font-weight: bold;
-        color: #000;
-        font-size: 18px;
+        cursor: pointer;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    .button:hover {
+        background-color: #FF5252;
+    }
+    .result {
+        text-align: center;
+        font-size: 24px;
+        color: #333;
+        font-weight: bold;
+        margin-top: 20px;
     }
     </style>
     """,
     unsafe_allow_html=True
 )
 
-st.title("Best Time to Publish Videos on YouTube")
-st.write("This app helps you find the best time to publish videos on YouTube for a specific niche.")
+# Header
+st.markdown("<div class='title'>YouTube Best Time Analyzer</div>", unsafe_allow_html=True)
+st.markdown("<div class='subtitle'>Find the best time to publish your YouTube videos based on your niche</div>", unsafe_allow_html=True)
 
-keyword = st.text_input("Enter a niche keyword:")
-button_placeholder = st.empty()
+# Input
+keyword = st.text_input("Enter your niche keyword (e.g., cooking, gaming, fitness):", key="keyword")
 
-with button_placeholder.container():
-    button_clicked = st.markdown(
-        """
-        <div class="center-button">
-            <button class="blue-button" onclick="window.location.reload();">
-                Analyze
-            </button>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-if st.button("Analyze"):
+# Button
+if st.markdown(
+    """
+    <div class='button-container'>
+        <button class='button' onclick="window.location.reload();">Analyze Timing</button>
+    </div>
+    """,
+    unsafe_allow_html=True
+):
     if not keyword.strip():
         st.error("Please enter a valid keyword.")
     else:
@@ -128,12 +155,9 @@ if st.button("Analyze"):
             best_hour = hour_counter.most_common(1)[0][0]
 
             # Display the result
-            st.markdown(
-                f"<p class='bold-text'>The best time to publish videos for this niche is: {best_hour}:00 UTC.</p>",
-                unsafe_allow_html=True
-            )
+            st.markdown(f"<div class='result'>The best time to publish videos for this niche is: {best_hour}:00 UTC.</div>", unsafe_allow_html=True)
         except Exception as e:
-            st.error(f"Please Try in Few Moment")
+            st.error(f"An error occurred: {e}")
 
 hide_links_style = """
         <style>
